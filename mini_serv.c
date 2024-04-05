@@ -43,7 +43,7 @@ int	main(int argc, char **argv)
 		exit_error("Fatal error\n");
 	if (listen(server_socket, MAX) < 0)
 		exit_error("Fatal error\n");
-	bzero(clients, sizeof(clients) * MAX);
+	bzero(clients, sizeof(client) * MAX);
 	FD_ZERO(&active_sockets);
 	FD_SET(server_socket, &active_sockets);
 	int	max_socket = server_socket;
@@ -52,7 +52,7 @@ int	main(int argc, char **argv)
 		ready_sockets = active_sockets;
 		if (select(max_socket + 1, &ready_sockets, NULL, NULL, NULL) < 0)
 			exit_error("Fatal error\n");
-		for (int socket_id = 0; socket_id < max_socket; socket_id++)
+		for (int socket_id = 0; socket_id <= max_socket; socket_id++)
 		{
 			if (!FD_ISSET(socket_id, &ready_sockets))
 				continue;
