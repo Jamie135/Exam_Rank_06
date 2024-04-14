@@ -1,8 +1,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <sys/socket.h>
 #include <stdio.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 
 typedef	struct client
@@ -46,13 +48,13 @@ int	main(int argc, char **argv)
 	bzero(user, sizeof(client) * MAX);
 	FD_ZERO(&active);
 	FD_SET(server, &active);
-	int	max_user = server;
+	int	recent_user = server;
 	while (42)
 	{
 		ready = active;
-		if (select(max_user + 1, &ready, NULL, NULL, NULL) < 0)
+		if (select(recent_user + 1, &ready, NULL, NULL, NULL) < 0)
 			err_exit("Fatal error\n");
-		for (int socket = 0; socket <= max_user; socket++)
+		for (int socket = 0; socket <= recent_user; socket++)
 		{
 			if (!FD_ISSET(socket, &ready))
 				continue;
@@ -63,7 +65,7 @@ int	main(int argc, char **argv)
 				if ((newfd = accept(server, NULL, NULL)) < 0)
 					err_exit("Fatal error\n");
 				FD_SET(newfd, &active);
-				max_user = (newfd > max_user) ? newfd : max_user;
+				recent_user = (newfd > recent_user) ? newfd : recent_user;
 				user[newfd].fd = newfd;
 				user[newfd].id = newid++;
 				sprintf(buffer, "server: client %d just arrived\n", user[newfd].id);
