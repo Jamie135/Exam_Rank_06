@@ -2,104 +2,116 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/select.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <sys/select.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
-typedef	struct client
+typedef	struct	s_client
 {
-	int	fd;
 	int	id;
-} client;
+	char	msg[1024];
+}	t_client;
 
-void	err_exit(char *str)
+t_client	client[1024];
+
+fd_set	activefd, readyfd, writefd;
+int	recentfd = 0;
+int	newid = 0;
+char	buffread[120000];
+char	buffwrite[120000];
+
+void	err(char *str)
 {
-	write(2, str, strlen(str));
+	if (str)
+		write(2, str, strlen(str));
+	else
+		write(2, "Fatal error", 11);
+	write(2, "\n", 1);
 	exit(1);
+}
+
+void	sendall(int	fd)
+{
+	for (int i = 0; i <= recentfd; i++)
+	{
+		if (FD_ISSET(i, &writefd) && i != fd)
+			send(i, &buffwrite, strlen(buffwrite), 0);
+	}
 }
 
 int	main(int argc, char **argv)
 {
-	const int	MAX = 128;
-	const int	BUF = 200000;
-	client	user[MAX];
-	char	buffer[BUF];
-	char	message[BUF];
-	int	newid = 0;
-	int	server;
-	fd_set	active, ready;
+	int	serverfd;
 
 	if (argc != 2)
-		err_exit("Wrong number of arguments\n");
-
-	if ((server = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-		err_exit("Fatal error\n");
-
-	struct sockaddr_in	addr = {0};
+		err("Wrong number of arguments");
+	if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		err(NULL);
+	
+	socklen_t	len;
+	struct	sockaddr_in	addr;
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons(atoi(argv[1]));
+
+	if (bind(serverfd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+		err(NULL);
+	if (listen(serverfd, 10) < 0)
+		err(NULL);
 	
-	if (bind(server, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-		err_exit("Fatal error\n");
-	if (listen(server, MAX) < 0)
-		err_exit("Fatal error\n");
-	bzero(user, sizeof(client) * MAX);
-	FD_ZERO(&active);
-	FD_SET(server, &active);
-	int	recent_user = server;
+	bzero(client, sizeof(client));
+	FD_ZERO(&activefd);
+	FD_SET(serverfd, &activefd);
+	recentfd = serverfd;
+
 	while (42)
 	{
-		ready = active;
-		if (select(recent_user + 1, &ready, NULL, NULL, NULL) < 0)
-			err_exit("Fatal error\n");
-		for (int socket = 0; socket <= recent_user; socket++)
+		readyfd = writefd = activefd;
+		if (select(recentfd + 1, &readyfd, &writefd, NULL, NULL) < 0)
+			err(NULL);
+		for (int socket = 0; socket <= recentfd; socket++)
 		{
-			if (!FD_ISSET(socket, &ready))
-				continue;
-			bzero(buffer, BUF);
-			if (socket == server)
+			if (FD_ISSET(socket, &readyfd) && socket == serverfd)
 			{
 				int	newfd;
-				if ((newfd = accept(server, NULL, NULL)) < 0)
-					err_exit("Fatal error\n");
-				FD_SET(newfd, &active);
-				recent_user = (newfd > recent_user) ? newfd : recent_user;
-				user[newfd].fd = newfd;
-				user[newfd].id = newid++;
-				sprintf(buffer, "server: client %d just arrived\n", user[newfd].id);
-				for (int i = 0; i < MAX; i++)
-				{
-					if (user[i].fd != 0 && user[i].fd != newfd)
-						send(user[i].fd, buffer, strlen(buffer), 0);
-				}
+
+				if ((newfd = accept(serverfd, (struct sockaddr *)&addr, &len)) < 0)
+					continue;
+				FD_SET(newfd, &activefd);
+				recentfd = (newfd > recentfd) ? newfd : recentfd;
+				client[recentfd].id = newid++;
+				sprintf(buffwrite, "server: client %d just arrived\n", client[newfd].id);
+				sendall(newfd);
+				break;
 			}
-			else
+			if (FD_ISSET(socket, &readyfd) && socket != serverfd)
 			{
-				int bytes = recv(socket, buffer, sizeof(buffer) - 1, 0);
+				int	bytes = recv(socket, buffread, sizeof(buffread) - 1, 0);
 
 				if (bytes <= 0)
 				{
-					bzero(message, BUF);
-					sprintf(message, "server: client %d just left\n", user[socket].id);
-					for (int i = 0; i < MAX; i++)
-					{
-						if (user[i].fd != 0 && user[i].fd != socket)
-							send(user[i].fd, message, strlen(message), 0);
-					}
+					sprintf(buffwrite, "server: client %d just left\n", client[socket].id);
+					sendall(socket);
+					FD_CLR(socket, &activefd);
 					close(socket);
-					FD_CLR(socket, &active);
+					break;
 				}
 				else
 				{
-					bzero(message, BUF);
-					sprintf(message, "client %d: %s\n", user[socket].id, buffer);
-					for (int i = 0; i < MAX; i++)
+					for (int i = 0, j = strlen(client[socket].msg); i < bytes; i++, j++)
 					{
-						if (user[i].fd != socket)
-							send(user[i].fd, message, strlen(message), 0);
+						client[socket].msg[j] = buffread[i];
+						if (client[socket].msg[j] == '\n')
+						{
+							client[socket].msg[j] = '\0';
+							sprintf(buffwrite, "client %d: %s\n", client[socket].id, client[socket].msg);
+							sendall(socket);
+							bzero(client[socket].msg, strlen(client[socket].msg));
+							j = -1;
+						}
 					}
+					break;
 				}
 			}
 		}
