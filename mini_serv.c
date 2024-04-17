@@ -10,11 +10,10 @@
 typedef	struct	s_client
 {
 	int	id;
-	char	msg[1024];
+	char	msg[100000];
 }	t_client;
 
 t_client	client[1024];
-
 fd_set	activefd, readyfd, writefd;
 int	recentfd = 0;
 int	newid = 0;
@@ -36,7 +35,8 @@ void	sendall(int	fd)
 	for (int i = 0; i <= recentfd; i++)
 	{
 		if (FD_ISSET(i, &writefd) && i != fd)
-			send(i, &buffwrite, strlen(buffwrite), 0);
+			if (send(i, buffwrite, strlen(buffwrite), 0) == -1)
+				err(NULL);
 	}
 }
 
@@ -51,13 +51,15 @@ int	main(int argc, char **argv)
 	
 	socklen_t	len;
 	struct	sockaddr_in	addr;
+	bzero(&addr, sizeof(addr));
+
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	addr.sin_port = htons(atoi(argv[1]));
 
 	if (bind(serverfd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
 		err(NULL);
-	if (listen(serverfd, 10) < 0)
+	if (listen(serverfd, 100) < 0)
 		err(NULL);
 	
 	bzero(client, sizeof(client));
@@ -69,10 +71,12 @@ int	main(int argc, char **argv)
 	{
 		readyfd = writefd = activefd;
 		if (select(recentfd + 1, &readyfd, &writefd, NULL, NULL) < 0)
-			err(NULL);
+			continue;
 		for (int socket = 0; socket <= recentfd; socket++)
 		{
-			if (FD_ISSET(socket, &readyfd) && socket == serverfd)
+			if (!FD_ISSET(socket, &readyfd))
+				continue;
+			if (socket == serverfd)
 			{
 				int	newfd;
 
@@ -85,7 +89,7 @@ int	main(int argc, char **argv)
 				sendall(newfd);
 				break;
 			}
-			if (FD_ISSET(socket, &readyfd) && socket != serverfd)
+			else
 			{
 				int	bytes = recv(socket, buffread, sizeof(buffread) - 1, 0);
 
