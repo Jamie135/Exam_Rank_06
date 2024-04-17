@@ -13,13 +13,6 @@ typedef	struct	s_client
 	char	msg[100000];
 }	t_client;
 
-t_client	client[1024];
-fd_set	activefd, readyfd, writefd;
-int	recentfd = 0;
-int	newid = 0;
-char	buffread[120000];
-char	buffwrite[120000];
-
 void	err(char *str)
 {
 	if (str)
@@ -29,6 +22,13 @@ void	err(char *str)
 	write(2, "\n", 1);
 	exit(1);
 }
+
+t_client	client[1024];
+char	buffread[120000];
+char	buffwrite[120000];
+int	recentfd = 0;
+int	newid = 0;
+fd_set	activefd, readyfd, writefd;
 
 void	sendall(int	fd)
 {
