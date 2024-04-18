@@ -35,8 +35,10 @@ void	sendall(int	fd)
 	for (int i = 0; i <= recentfd; i++)
 	{
 		if (FD_ISSET(i, &writefd) && i != fd)
+		{
 			if (send(i, buffwrite, strlen(buffwrite), 0) == -1)
 				err(NULL);
+		}
 	}
 }
 
@@ -57,7 +59,7 @@ int	main(int argc, char **argv)
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	addr.sin_port = htons(atoi(argv[1]));
 
-	if (bind(serverfd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+	if (bind(serverfd, (const struct sockaddr *)&addr, sizeof(addr)) < 0)
 		err(NULL);
 	if (listen(serverfd, 100) < 0)
 		err(NULL);
@@ -91,7 +93,7 @@ int	main(int argc, char **argv)
 			}
 			else
 			{
-				int	bytes = recv(socket, buffread, sizeof(buffread) - 1, 0);
+				int	bytes = recv(socket, buffread, sizeof(buffread), 0);
 
 				if (bytes <= 0)
 				{
