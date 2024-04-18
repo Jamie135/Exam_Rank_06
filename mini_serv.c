@@ -86,7 +86,7 @@ int	main(int argc, char **argv)
 					continue;
 				FD_SET(newfd, &activefd);
 				recentfd = (newfd > recentfd) ? newfd : recentfd;
-				client[recentfd].id = newid++;
+				client[newfd].id = newid++;
 				sprintf(buffwrite, "server: client %d just arrived\n", client[newfd].id);
 				sendall(newfd);
 				break;
